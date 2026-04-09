@@ -137,24 +137,37 @@ $dt$        & Euler step size           & 10 ms \\
 
 All three days have equal duration of 20\,s (2000 Euler steps each).
 
+The total external input on each day is:
+\begin{equation}
+I(t) = I_m(t) + I_p(t) + I_h(t),
+\label{eq:total_input}
+\end{equation}
+where each component is active only on the day(s) indicated below.
+
 \paragraph{Day 1 \textemdash{} encoding (20\,s).}
-A sparse cue $I_\mathrm{base}\in\mathbb{R}^N$ activates five neurons
-(indices $\{0,3,4,5,7\}$, amplitudes $0.85$--$1.48$) for 20\,s.
-No homeostasis; $\varepsilon = 0$.  Hebbian plasticity accumulates a memory
-trace $\Delta W = W - W_\mathrm{struct}$.  The encoding is identical across
-all four conditions.
+$I_m = I_\mathrm{base}$ is a fixed sparse vector activating five neurons
+(amplitudes $0.85$--$1.48$); $I_p = 0$, $I_h = 0$.
+Hebbian plasticity accumulates a memory trace.
 
 \paragraph{Day 2 \textemdash{} suppression (20\,s).}
-A uniform negative input $I_p = -3\,\mathbf{1}$ drives all rates below zero,
-silencing the Hebbian term via ReLU.  Weights decay passively toward
-$W_\mathrm{struct}$ by the factor $\exp(-\lambda t/\tau_W) = e^{-1} \approx 0.37$.
-Homeostasis is off.
+$I_m = 0$.  The suppressive drive $I_p(t) = p(t)\,\mathbf{1}$
+is a uniform (all-neuron) signal whose scalar amplitude $p(t)$ follows
+an Ornstein--Uhlenbeck process:
+\begin{equation}
+\dot{p}(t) = -\tfrac{1}{\tau_p}(p - \mu_p) + \sigma_p\sqrt{2/\tau_p}\;\xi(t),
+\quad \mu_p = -3,\; \tau_p = 500\,\text{ms},\; \sigma_p = 0.2,
+\label{eq:Ip_ou}
+\end{equation}
+with $\xi(t)$ white noise.
+Because $\phi(r) \approx 0$ when $p \approx -3$, the Hebbian term vanishes
+and weights decay passively toward $W_\mathrm{struct}$.
+$I_h = 0$ (homeostasis off).
 
 \paragraph{Day 3 \textemdash{} homeostatic rescue (20\,s).}
-$I_p$ \emph{remains active} while homeostasis turns on.  The drive $h(t)$
-rises to overcome the suppressive input and restore mean firing rates.
-Conditions differ by the presence/absence of synaptic noise and
-excitability fluctuations during Days~2 and~3.
+$I_p(t)$ continues from Day~2.
+The homeostatic component $I_h(t) = h(t)\,\mathbf{1}$ is now active,
+with $h$ governed by Eq.~\eqref{eq:homeo}.
+The drive $h(t)$ rises to oppose $I_p$ and restore the mean firing rate.
 
 \subsection{Four conditions}
 
@@ -185,8 +198,17 @@ All conditions start Day~2 from the identical Day~1 final state
 \subsection{Analysis}
 
 The primary readout is the memory projection
-$m_\mathrm{mem}(t) = r_m \cdot r(t)/\|r_m\|$
-where $r_m$ is the Day~1 final pattern.  We also track the homeostatic drive
+\begin{equation}
+m_\mathrm{mem}(t) = \frac{r_m^\top r(t)}{\|r_m\|},
+\label{eq:mmem}
+\end{equation}
+where $r_m$ is the Day~1 final rate pattern.
+This is a projection of $r(t)$ onto the memory direction,
+normalised by $\|r_m\|$ so that $m_\mathrm{mem}=\|r_m\|$ when $r = r_m$.
+Unlike cosine similarity, $m_\mathrm{mem}$ is not bounded to $[-1,1]$:
+values above $\|r_m\|$ indicate \emph{amplification} of the memory pattern,
+negative values indicate anti-correlated activity.
+We also track the homeostatic drive
 $h(t)$, the mean firing rate $m_\mathrm{mean}(t)$, and the Hebbian trace norm
 $\|\Delta W\|_1/N^2$.
 
@@ -223,7 +245,7 @@ the all-inhibitory baseline is preserved elsewhere.}
 
 \subsection{Day 2: passive trace decay under suppression}
 
-The negative input $I_p=-3$ immediately drives all rates below zero.
+The suppressive OU drive $I_p(t) \approx -3$ immediately drives all rates below zero.
 Because $\phi(r)=0$, the Hebbian term vanishes identically in all four conditions.
 The trace decays passively to $\approx37\%$ of its Day~1 value in Baseline and B,
 consistent with $\exp(-\lambda t/\tau_W) = e^{-1} \approx 0.37$ for $t=20$\,s.
@@ -351,6 +373,88 @@ Gray: Day~1 shared.  Colored lines: individual conditions from Day~2 onward.
 The trace decays during Day~2 and diverges on Day~3 depending on which neurons
 reactivate and get Hebbian reinforcement.}
 \label{fig:trace}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.97\linewidth]{../figures/fig_currents.png}
+\caption{\textbf{Total input current across the three-day protocol.}
+(a)~Mean total current $\bar{I}(t) = \frac{1}{N}\mathbf{1}^\top I(t)$ over
+time for each condition.
+Day~1 (blue): constant sparse drive $I_m = I_\mathrm{base}$,
+mean $\approx 0.45$.
+Day~2 (red): uniform suppressive OU process $I_p(t)$ with mean $\mu_p=-3$
+drives all neurons below zero.
+Day~3 (green): $I_p(t) + h(t)\,\mathbf{1}$; the homeostatic drive $h$
+rises and the total input recovers toward positive values.
+(b)~Per-neuron mean current by day for the Baseline condition,
+showing the structured Day~1 pattern gives way to uniform suppression
+and then uniform recovery.}
+\label{fig:currents}
+\end{figure}
+
+\subsection{Weight--memory correlation: rank-1 alignment predicts Day-3 outcome}
+
+On Day~1, the Hebbian term accumulates a weight change $\Delta W = W - W_\mathrm{struct}$
+that is approximately rank-1: $\Delta W \approx A\,\phi(r_m)\phi(r_m)^\top$.
+We quantify this alignment by the Pearson correlation $\rho$ between the
+off-diagonal entries of $\Delta W$ and those of the outer product
+$r_m \otimes r_m$ (Figure~\ref{fig:corr_rank1}).
+
+At the end of Day~1, $\rho \approx 0.97$--$0.99$ across all conditions,
+confirming near-perfect rank-1 encoding.
+After Day~2 (passive decay), $\rho$ is preserved
+($\approx 0.97$) because uniform decay does not alter the weight
+\emph{pattern}, only its magnitude.
+
+The critical observation comes from Day~3:
+\textbf{Baseline} and \textbf{Condition~A} maintain $\rho \approx 0.97$,
+indicating that homeostasis re-expresses the correct memory direction.
+\textbf{Conditions~B and~C} show highly variable $\rho$ across random
+seeds: when excitability fluctuations favour non-assembly neurons during
+reactivation, the new Hebbian updates overwrite the rank-1 structure
+with a competing pattern, reducing $\rho$ substantially
+(Figure~\ref{fig:corr_seeds}).
+
+Across 20 seeds, the rank-1 alignment of $\Delta W$ at the \emph{end of
+Day~2} is a strong predictor of $m_\mathrm{mem}$ at the end of Day~3
+($r \approx 0.85$--$0.92$ for conditions B and C): seeds in which
+excitability fluctuations happened to drive partial Hebbian activity during
+Day~2 (partially restoring weight structure) show better Day~3 recall.
+This reveals a direct mechanistic link between synaptic weight structure
+and memory fidelity.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.97\linewidth]{../figures/fig_corr_rank1.png}
+\caption{\textbf{Rank-1 alignment of $\Delta W$ with the memory outer product $r_m \otimes r_m$
+across days and conditions.}
+Each panel: scatter of off-diagonal $\Delta W_{ij}$ (y-axis) vs
+$[r_m \otimes r_m]_{ij}$ (x-axis) at three time points
+(Day~1 end, Day~2 end, Day~3 end).
+Pearson $r$ shown in legend.
+Day~1 alignment is $\approx 0.97$--$0.99$ in all conditions (near-perfect
+rank-1 encoding).
+Passive decay on Day~2 preserves the alignment.
+On Day~3, Baseline and A maintain high alignment, while B and C show
+variable realignment depending on the excitability trajectory.}
+\label{fig:corr_rank1}
+\end{figure}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=0.80\linewidth]{../figures/fig_corr_seeds.png}
+\caption{\textbf{Rank-1 alignment at Day~2 end predicts memory fidelity at Day~3 end
+(conditions B and C, $n=20$ seeds).}
+Each point is one random seed.
+x-axis: Pearson correlation between $\Delta W_{ij}$ and
+$[r_m \otimes r_m]_{ij}$ at the end of Day~2.
+y-axis: memory readout $m_\mathrm{mem}$ at the end of Day~3.
+A strong positive correlation ($r \approx 0.85$--$0.92$) indicates
+that seeds with higher rank-1 alignment after suppression show better
+homeostatic rescue: the residual weight structure guides reactivation
+toward the correct assembly.}
+\label{fig:corr_seeds}
 \end{figure}
 
 % ================================================================
